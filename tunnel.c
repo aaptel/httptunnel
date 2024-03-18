@@ -94,6 +94,14 @@ struct tunnel
 
 static const size_t sizeof_header = sizeof (Request) + sizeof (Length);
 
+static void
+cipher(void *data, size_t len)
+{
+  int i;
+  for (i = 0; i < len; i++)
+    ((unsigned char*)data)[i] ^= 0x42;
+}
+
 static inline int
 tunnel_is_disconnected (Tunnel *tunnel)
 {
@@ -592,6 +600,7 @@ tunnel_write_request (Tunnel *tunnel, Request request,
 
   if (data)
     {
+      int ret;
       Length network_length = htons ((short)length);
       if (tunnel_write_data (tunnel,
 			     &network_length,
@@ -605,8 +614,10 @@ tunnel_write_request (Tunnel *tunnel, Request request,
 	  dump_buf (debug_file, data, (size_t)length);
 	}
 #endif
-
-      if (tunnel_write_data (tunnel, data, (size_t)length) == -1)
+      cipher(data, length); // xor buffer
+      ret = tunnel_write_data (tunnel, data, (size_t)length);
+      cipher(data, length); // restore user buffer
+      if (ret == -1)
 	return -1;
     }
 
@@ -866,6 +877,7 @@ tunnel_read_request (Tunnel *tunnel, enum tunnel_request *request,
 	    errno = EIO;
 	  return -1;
 	}
+      cipher(buf, len); // xor buffer
       tunnel->in_total_raw += n;
       log_annoying ("tunnel_read_request: in_total_raw = %u",
 		    tunnel->in_total_raw);
